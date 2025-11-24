@@ -6,8 +6,8 @@ A secure, transactional API for transferring funds between accounts with Redis c
 
 1. **Clone and set up the project**
    ```bash
-   git clone [your-repo-url].git
-   cd bank-transfer-api
+   git clone https://github.com/rakeshparmar3/paysera-assignment.git
+   cd paysera-assignment
    cp .env.dist .env  # Update with your settings if needed
    ```
 
