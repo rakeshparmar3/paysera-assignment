@@ -1,0 +1,128 @@
+You are an expert PHP/Symfony dev and infrastructure engineer. Create a production-like minimal project that implements a secure, transactional API to transfer funds between accounts and is testable. Output a Git repository layout with files and content. Follow modern best practices (Symfony 7.0, PHP 8.2), use Doctrine ORM with MySQL (mariadb compatible), Redis for caching/locking if needed, Docker for services, PHPUnit integration tests, logging (Monolog), and include CI pipeline for tests.
+
+Produce the exact file contents for the following files (create files not just descriptions):
+
+1. docker/ folder with:
+
+php/Dockerfile — a PHP-FPM image with extensions: pdo_mysql, redis, pcntl, intl, sockets, zip, ext-json; composer installed, user-friendly developer settings. Use PHP 8.2.
+
+nginx/default.conf — Nginx site config for Symfony public directory and proxy_pass to php-fpm.
+
+2. docker-compose.yml top-level (or a fragment that can be merged into existing compose) that defines:
+
+app service (build from docker/php), mounts code, runs php-fpm, exposes 9000 internally.
+
+nginx service using nginx:alpine, mounts docker/nginx/default.conf and public/, depends_on app.
+
+db service using mariadb:10.6 (or mysql:8 recommended) with persistent volume and environment variables.
+
+redis service using redis:7.
+
+phpmyadmin (optional) not required but can be left as already running in infra; put a comment.
+
+A worker service for background jobs (same image as app but runs bin/console messenger:consume).
+
+A test service (optional) to run PHPUnit against a test DB/Redis.
+
+Proper networks and volumes.
+
+3. Symfony skeleton app files:
+
+composer.json minimal required dependencies: symfony/skeleton, symfony/flex, doctrine/orm, doctrine/doctrine-bundle, symfony/validator, symfony/security-bundle, symfony/http-client, symfony/messenger (optional), predis/predis or symfony/redis-messenger, monolog/monolog, symfony/profiler-pack (dev), phpunit/phpunit (dev).
+
+.env.example with DATABASE_URL and REDIS_URL pointing to db:3306 and redis://redis:6379, and APP_ENV=dev.
+
+config/packages/doctrine.yaml configured to use env DATABASE_URL.
+
+config/packages/monolog.yaml with file logging.
+
+4. Application code:
+
+src/Entity/Account.php — entity with id (int), owner (string), balance (decimal(15,2)), currency (string), version(int, for optimistic lock) optional.
+
+src/Repository/AccountRepository.php — custom repo helper findForUpdate(int $id) using SELECT FOR UPDATE (Doctrine’s getConnection()->executeQuery or PessimisticLock).
+
+src/Service/TransferService.php — an injectable service that performs transfers in a single DB transaction using Doctrine Connection or EntityManager transaction API. It should:
+
+Validate accounts exist.
+
+Lock both accounts (always lock rows in deterministic order by id to avoid deadlocks).
+
+Check sufficient funds.
+
+Debit and credit balances.
+
+Persist changes and commit.
+
+Use DB-level transactions and pessimistic locking (FOR UPDATE) to ensure integrity under concurrency.
+
+Optionally use Redis distributed lock for cross-instance safety (demonstrate approach; fallback to DB transactions if Redis unavailable).
+
+Throw typed exceptions on errors.
+
+src/Controller/TransferController.php — a secured API endpoint POST /api/transfers that accepts JSON:
+
+{
+"from_account_id": 123,
+"to_account_id": 456,
+"amount": "100.50",
+"currency": "INR"
+}
+
+
+Validate input.
+
+Authenticate (for this task, implement a simple API token check from X-API-KEY header configurable by env var).
+
+Call TransferService and return 201 with transfer record or appropriate 4xx/5xx.
+
+src/Entity/Transfer.php — log of transfer attempts with status, amount, timestamps, and optional metadata.
+
+5. Tests:
+
+tests/Integration/TransferTest.php — an integration test that spins up an in-memory or test MySQL (use docker-compose test db) and Redis to simulate concurrent transfers. Provide examples of:
+
+Successful transfer reduces source balance and increases destination.
+
+Concurrent transfers causing one to fail due to insufficient funds — demonstrate DB locking prevents double-spend.
+
+PHPUnit configuration phpunit.xml.dist.
+
+6. Migrations: Provide a Doctrine migration (or SQL file migrations/initial.sql) that creates accounts and transfers tables with appropriate constraints and indexes.
+
+7. Logging & Error handling:
+
+Show Monolog usage configured to write to var/log/*.log.
+
+TransferService should catch DB exceptions and log details (but do not expose internal details to client).
+
+8. Documentation: README.md with:
+
+Setup instructions: clone, docker compose up --build, run composer install (inside container), run php bin/console doctrine:migrations:migrate, create some seed accounts SQL, run worker if relevant.
+
+Example curl requests (including API key).
+
+How to run tests locally (docker-compose test profile and vendor/bin/phpunit).
+
+Approximate time spent and the AI prompts/tools used (be explicit).
+
+9. CI: .github/workflows/ci.yml — run composer install, run phpunit using services (mysql + redis) started as service containers in the workflow.
+
+
+NOTES:-
+
+Keep the code minimal but production-minded: input validation, typed DTOs, typed exceptions, logging, environment-driven configuration.
+
+Use Doctrine transactions and SELECT ... FOR UPDATE (pessimistic locking). Show code snippet for consistent lock ordering to avoid deadlocks (always lock lower ID first).
+
+Write code with strict types, PSR-12 style, and dependency injection patterns.
+
+Include comments in code explaining why you chose DB tx + FOR UPDATE and optional Redis locking.
+
+Include at least one integration test simulating concurrent transfers (you may simulate concurrency by running two transfers back-to-back that would conflict).
+
+Provide docker-compose.yml that can be dropped into existing docker compose (make sure service names don't conflict; use app, nginx, db, redis).
+
+Provide helpful error codes: 400 for validation, 401 for auth, 402/409 for insufficient funds/conflict, 500 for server errors.
+
+Produce full file contents for the critical files listed above (Dockerfile, docker-compose.yml, nginx config, Account entity, TransferService, TransferController, one integration test, README, GitHub workflow, migration SQL). Make the output human-readable and ready to commit as a Git repo.
